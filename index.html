@@ -60,6 +60,7 @@
     .autocomplete-list li:hover { background: #f8fafc; }
     .btn-action { background: var(--accent-black); color: #ffffff; border: none; padding: 7px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; }
 
+    /* 뉴스 및 아코디언 상세 영역 */
     .news-item { border-bottom: 1px solid var(--border-color); }
     .news-item-header { padding: 13px 18px; cursor: pointer; display: flex; justify-content: space-between; }
     .news-item-body { padding: 16px 18px; background: #fafbfc; border-top: 1px solid #edf0f5; display: none; }
@@ -74,10 +75,12 @@
 
     .insight-box { background: #ffffff; border: 1px solid #d1d6db; border-left: 4px solid var(--accent-blue); padding: 14px 16px; margin-bottom: 16px; border-radius: 4px; line-height: 1.6; }
     .insight-title { font-weight: 800; color: #1d4ed8; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
-    .article-row { padding: 8px 0; border-bottom: 1px dashed var(--border-color); }
-    .article-row:last-child { border-bottom: none; }
-    .article-link { color: #1d4ed8; text-decoration: none; font-weight: 600; }
-    .article-link:hover { text-decoration: underline; }
+    
+    /* 🚀 관련 기사 다이렉트 링크 카드 스타일 */
+    .article-card { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 8px; text-decoration: none; color: #191f28; transition: all 0.15s; }
+    .article-card:hover { border-color: var(--accent-blue); background: #f0f7ff; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.04); }
+    .article-card-left { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 12.5px; }
+    .article-card-right svg { width: 16px; height: 16px; stroke: #8b95a1; stroke-width: 2; fill: none; }
     
     .toast-box { position: fixed; bottom: 24px; right: 24px; background: #1e2024; color: #ffffff; padding: 10px 18px; border-radius: 8px; font-weight: 600; opacity: 0; transition: all 0.25s ease; pointer-events: none; z-index: 9999; }
     .toast-box.show { opacity: 1; }
@@ -161,7 +164,7 @@
     let apiData = [];      
     let displayData = [];  
 
-    // 최근 7일치 날짜 자동 생성
+    // 최근 7일치 날짜 생성
     function initDateOptions() {
       const dateSelect = document.getElementById("datePicker");
       dateSelect.innerHTML = "";
@@ -183,12 +186,13 @@
       currentDate = dateSelect.value;
     }
 
-    // ★ 수정됨: 단위 무조건 USD($)로 통일, 지역별 차별화된 데이터 풀 적용
+    // 매출 단위 USD 통일 포맷
     function formatCurrency(num) {
       if (num === null || num === undefined || num === "" || isNaN(Number(num))) return "-";
       return `$ ${Number(num).toLocaleString()}`;
     }
 
+    // 국가별 베이스 데이터 분리 적용
     function getBaseTop20(region) {
       let base = [
         { rank: 1, name: "제우스: 오만의 신", pub: "컴투스", genre: "MMORPG", rev: "607251", change: "-", growth: "0%", kind: "" },
@@ -213,7 +217,6 @@
         { rank: 20, name: "버섯커 키우기", pub: "조이넷게임즈", genre: "방치형 RPG", rev: "78900", change: "-", growth: "0%", kind: "" }
       ];
 
-      // ★ 수정됨: 미국, 중국 등 지역별 고유 스케일 및 타이틀 적용 (모두 동일하게 보이지 않도록 분리)
       if(region !== 'KR') {
         base.forEach((b, idx) => {
            if(region === 'US') {
@@ -230,8 +233,10 @@
               if(idx===0) { b.name = "우마무스메 프리티 더비"; b.pub = "Cygames"; b.genre = "육성"; }
               if(idx===1) { b.name = "페이트/그랜드 오더"; b.pub = "Aniplex"; b.genre = "RPG"; }
            }
+           if(region === 'TW') {
+              if(idx===5) { b.name = "리니지W"; b.pub = "엔씨소프트"; b.genre = "MMORPG"; }
+           }
            
-           // 지역 시장 규모에 따른 차별화된 달러($) 매출 배수 적용
            let multi = region === 'US' ? 4.5 : region === 'CN' ? 5.2 : region === 'JP' ? 2.8 : region === 'TW' ? 0.8 : 1;
            b.rev = String(Math.floor(Number(b.rev) * multi));
         });
@@ -292,7 +297,7 @@
       return `현재 순위권 내에서 안정적인 캐시카우 역할을 수행 중입니다. 전반적인 지표는 견조하게 유지되고 있으나 추가적인 매출 도약을 위해서는 유저 피드백을 반영한 BM 다각화가 요구됩니다.`;
     }
 
-    // ★ 수정됨: 속도 최적화 Fetch 로직 (404 발생 시 즉시 다음 날짜로 점프, 불필요한 프록시 대기 시간 제거)
+    // ★ 초고속 탐색 적용: allorigins raw 방식으로 딜레이 제거
     async function loadDataFromApi() {
       const dateSelect = document.getElementById("datePicker");
       const notice = document.getElementById("noticeText");
@@ -308,48 +313,37 @@
         try {
           // 1. 직접 접근 시도 (가장 빠름)
           let response = await fetch(targetUrl).catch(() => { throw new Error("NETWORK_FAIL"); });
-          
           if (response.ok) {
             let json = await response.json();
-            dateSelect.selectedIndex = currentIndex;
-            currentDate = testDate;
+            dateSelect.selectedIndex = currentIndex; currentDate = testDate;
             processApiData(json.regions[currentRegion] || []);
-            notice.innerHTML = `<span style="color:#1e7e34;">${currentRegion} (${testDate}) — 실시간 API가 성공적으로 연동되었습니다.</span>`;
+            notice.innerHTML = `<span style="color:#1e7e34;">${currentRegion} (${testDate}) — 실시간 API 연동 성공</span>`;
             document.getElementById("footerDate").innerText = testDate;
             return;
-          } else if (response.status === 404) {
-            // 서버에 데이터가 없음 -> 프록시 타지 않고 즉각 다음 날짜로 스킵 (속도 최적화 핵심)
-            currentIndex++;
-            continue;
-          } else {
-            throw new Error("HTTP_ERROR");
-          }
+          } 
+          if (response.status === 404) { currentIndex++; continue; }
+          throw new Error("HTTP_ERROR");
         } catch (err) {
-          // 2. CORS 에러 시 프록시 우회 시도
+          // 2. 고속 프록시 우회 시도 (allorigins raw)
           try {
-            let proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+            let proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
             let proxyRes = await fetch(proxyUrl);
-            let data = await proxyRes.json();
+            if(proxyRes.status === 404) { currentIndex++; continue; }
+            if(!proxyRes.ok) throw new Error("PROXY_FAIL");
             
-            if (data.status && data.status.http_code === 404) {
-              currentIndex++;
-              continue; // 프록시로 봐도 404면 다음 날짜로
-            }
-            
-            let json = JSON.parse(data.contents);
-            dateSelect.selectedIndex = currentIndex;
-            currentDate = testDate;
+            let json = await proxyRes.json();
+            dateSelect.selectedIndex = currentIndex; currentDate = testDate;
             processApiData(json.regions[currentRegion] || []);
             notice.innerHTML = `<span style="color:#1e7e34;">${currentRegion} (${testDate}) — 실시간 API 연동 완료 (보안 우회망)</span>`;
             document.getElementById("footerDate").innerText = testDate;
             return;
           } catch(e) {
-            break; // 프록시도 완전 실패하면 루프 탈출
+            break; // 프록시 실패 시 즉시 루프 탈출
           }
         }
       }
       
-      // 3. 최근 7일 내 모두 실패(또는 CORS 완벽 차단) 시 최후의 보루(Fallback) 데이터 표출
+      // 3. Fallback 데이터 표출
       const fallbackDate = "2026-09-29";
       let fallbackIdx = Array.from(dateSelect.options).findIndex(o => o.value === fallbackDate);
       if(fallbackIdx !== -1) dateSelect.selectedIndex = fallbackIdx;
@@ -374,16 +368,15 @@
 
       apiData = rawData.map(item => {
         const revNum = item.auto?.revenue || 0;
-        const gPct = item.auto?.growth_pct; // undefined 처리 위함
+        const gPct = item.auto?.growth_pct;
         const historyData = generateMockHistory(revNum, gPct, currentDate);
         const expertInsight = generateExpertInsight(item.kind, Number(gPct), item.reason, item.feature);
         
         let finalRefs = item.refs || [];
         if (finalRefs.length === 0) {
-           finalRefs = [{ title: `📰 [뉴스 검색] ${item.title} 관련 최신 기사 및 동향 확인하기`, url: `https://news.google.com/search?q=${encodeURIComponent(item.title)}` }];
+           finalRefs = [{ title: `[뉴스 검색] ${item.title} 관련 최신 기사 확인하기`, url: `https://news.google.com/search?q=${encodeURIComponent(item.title)}` }];
         }
 
-        // NaN 및 빈값 깔끔하게 포맷 처리
         let formattedGrowth = "-";
         if (gPct !== undefined && gPct !== null && !isNaN(Number(gPct))) {
            formattedGrowth = (Number(gPct) > 0 ? "+" : "") + Number(gPct) + "%";
@@ -468,8 +461,13 @@
               ${item.devNote ? `<p style="color:#8b95a1; font-size:11.5px; margin-top:10px;">* 개발사 정보: ${item.devNote}</p>` : ''}
             </div>
             
-            <div style="font-weight:800; color:#191f28; margin-bottom: 8px; font-size:12.5px; padding-top:4px;">📰 관련 기사 및 출처</div>
-            ${item.refs.map(art => `<div class="article-row"><a href="${art.url}" target="_blank" class="article-link">${art.title}</a></div>`).join('')}
+            <div style="font-weight:800; color:#191f28; margin-bottom: 8px; font-size:12.5px; padding-top:4px;">📰 관련 기사 다이렉트 링크</div>
+            ${item.refs.map(art => `
+              <a href="${art.url}" target="_blank" class="article-card">
+                <div class="article-card-left">📰 <span>${art.title}</span></div>
+                <div class="article-card-right"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+              </a>
+            `).join('')}
           </div>
         </div>
       `).join('');
@@ -487,13 +485,40 @@
         const n = code === 'KR'?'한국':code==='TW'?'대만':code==='JP'?'일본':code==='US'?'미국':'중국';
         btn.className = btn.textContent.includes(n) ? "nav-pill-btn active" : "nav-pill-btn outline";
       });
+      
+      const idx = document.getElementById("datePicker").selectedIndex;
+      document.getElementById("datePicker").selectedIndex = 0; // 지역 변경시 가장 최신일자로 리셋
       loadDataFromApi();
     }
     
     function handleDateChange() { 
       currentDate = document.getElementById("datePicker").value; 
-      // 사용자가 날짜를 '직접' 선택했을 때는 autoFallback 기능을 끕니다. (해당 날짜만 콕 집어 확인하기 위함)
-      fetchDashboardData(currentDate, currentRegion, false); 
+      
+      // 선택한 특정 날짜 1개만 직접 로드 (루프 돌지 않음)
+      const notice = document.getElementById("noticeText");
+      notice.innerHTML = `실시간 데이터를 동기화하고 있습니다... <span style="font-size:11.5px; color:#3182f6; font-weight:800;">(${currentDate} 수동 로딩)</span>`;
+      
+      const targetUrl = `https://webzendashboard.webboy0926.workers.dev/data/issues/${currentDate}.json`;
+      
+      fetch(targetUrl)
+        .then(res => { if(!res.ok) throw new Error("fail"); return res.json(); })
+        .then(json => {
+           processApiData(json.regions[currentRegion] || []);
+           notice.innerHTML = `<span style="color:#1e7e34;">${currentRegion} (${currentDate}) — 실시간 API 연동 성공</span>`;
+        })
+        .catch(() => {
+           fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`)
+             .then(res => { if(!res.ok) throw new Error("fail"); return res.json(); })
+             .then(json => {
+                processApiData(json.regions[currentRegion] || []);
+                notice.innerHTML = `<span style="color:#1e7e34;">${currentRegion} (${currentDate}) — 실시간 API 연동 완료 (우회망)</span>`;
+             })
+             .catch(() => {
+                processApiData([]);
+                notice.innerHTML = `<span style="color:#d9383a;">${currentRegion} (${currentDate}) — 해당 일자의 이슈 데이터를 찾을 수 없습니다. 기본 랭킹만 표시합니다.</span>`;
+             });
+        });
+        document.getElementById("footerDate").innerText = currentDate;
     }
 
     const searchInput = document.getElementById('trackInput'), autocompleteList = document.getElementById('autocompleteList');
@@ -533,7 +558,6 @@
 
     window.addEventListener("DOMContentLoaded", () => { 
       initDateOptions(); 
-      // 앱 최초 구동 시에는 오늘 데이터가 없으면 자동으로 전날을 찾아 넘어가는(autoFallback=true) 초기 로드 함수 실행
       loadDataFromApi(); 
     });
   </script>
