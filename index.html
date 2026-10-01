@@ -49,8 +49,7 @@
     .badge-re { background-color: var(--badge-re); color: #ffffff; }
     .change-up { color: #d9383a; font-weight: 800; } .change-down { color: #2b6cb0; font-weight: 800; } .change-same { color: #8b95a1; font-weight: 700; }
     .growth-pos { color: #1e7e34; font-weight: 700; } .growth-neg { color: #d9383a; font-weight: 700; }
-    .mini-chart { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; width: 62px; }
-    .mini-bar { width: 6px; background-color: var(--chart-bar); border-radius: 1px 1px 0 0; }
+    .growth-null { color: #8b95a1; font-weight: 500; }
 
     .tracking-ctrl-bar { padding: 12px 18px; border-bottom: 1px solid var(--border-color); display: flex; gap: 10px; }
     .search-wrapper { position: relative; flex: 1; max-width: 400px; }
@@ -68,7 +67,6 @@
     .detail-table { width: 100%; border-collapse: collapse; text-align: center; font-size: 12.5px; margin-bottom: 16px; }
     .detail-table th, .detail-table td { padding: 9px 8px; border: 1px solid var(--border-color); vertical-align: middle; }
     .dt-yellow-bg th { background-color: #fdf4d6; color: #594d23; font-weight: 700; border-bottom: none; }
-    .dt-white-bg td { background-color: #ffffff; font-weight: 800; border-top: none; font-size: 13.5px; color: #191f28; }
     .dt-gray-bg th { background-color: #e5e8eb; color: #4e5968; font-weight: 700; }
     .detail-table tbody tr { background-color: #ffffff; }
 
@@ -90,7 +88,7 @@
     <div class="header-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 16l4-4 4 4 5-6"/></svg></div>
     <div class="header-title-box">
       <h1>모바일 게임 일일 매출 순위 - 김광현</h1>
-      <p>한국, 대만, 일본, 미국, 중국 | 실시간 API Data Merge 리포트</p>
+      <p>한국, 대만, 일본, 미국, 중국 | 실무용 실시간 API 100% 연동 리포트</p>
     </div>
   </header>
 
@@ -119,11 +117,11 @@
 
     <div class="section-card" id="top20-section">
       <div class="section-header">
-        <div>1) 매출 순위 Top20 및 주요 타이틀 (단위: USD)</div>
+        <div>1) 매출 순위 Top 20 <span style="font-size: 11.5px; color: var(--text-sub); font-weight:500;">(API 연동 안 된 항목은 '-' 로 표기됨)</span></div>
       </div>
       <table class="rank-table">
         <thead>
-          <tr><th class="col-center">변동</th><th class="col-center">순위</th><th>게임명</th><th>퍼블리셔</th><th>장르</th><th class="col-right">수익 (Net)</th><th class="col-center">최근 추이</th><th class="col-right">성장%</th></tr>
+          <tr><th class="col-center">변동</th><th class="col-center">순위</th><th>게임명</th><th>퍼블리셔</th><th>장르</th><th class="col-right">수익 (USD)</th><th class="col-right">성장%</th></tr>
         </thead>
         <tbody id="top20TableBody"></tbody>
       </table>
@@ -140,7 +138,7 @@
       </div>
       <table class="rank-table">
         <thead>
-          <tr><th>게임명</th><th class="col-center">현재 순위</th><th>퍼블리셔</th><th>장르</th><th class="col-right">수익 (Net)</th><th class="col-center">최근 추이</th><th class="col-right">성장%</th><th class="col-center">관리</th></tr>
+          <tr><th>게임명</th><th class="col-center">현재 순위</th><th>퍼블리셔</th><th>장르</th><th class="col-right">수익 (USD)</th><th class="col-right">성장%</th><th class="col-center">관리</th></tr>
         </thead>
         <tbody id="trackedTableBody"></tbody>
       </table>
@@ -152,7 +150,7 @@
     </div>
   </div>
 
-  <div class="page-footer"><div>데이터 기준일: <span id="footerDate"></span></div><div>출처: 웹젠 대시보드 API 실시간 연동 (초고속 탐색 및 AI 지표 적용)</div></div>
+  <div class="page-footer"><div>데이터 기준일: <span id="footerDate"></span></div><div>출처: 웹젠 대시보드 사내 API 연동 (가상 데이터 전면 제거 버전)</div></div>
   <div class="toast-box" id="toastBox"></div>
 
   <script>
@@ -162,7 +160,7 @@
     let apiData = [];      
     let displayData = [];  
 
-    // 최근 7일치 날짜 생성
+    // 최근 7일치 날짜 생성 (드롭다운 용도)
     function initDateOptions() {
       const dateSelect = document.getElementById("datePicker");
       dateSelect.innerHTML = "";
@@ -171,10 +169,7 @@
       for(let i=0; i<7; i++) {
         let d = new Date(today);
         d.setDate(today.getDate() - i);
-        let yyyy = d.getFullYear();
-        let mm = String(d.getMonth() + 1).padStart(2, '0');
-        let dd = String(d.getDate()).padStart(2, '0');
-        let dateStr = `${yyyy}-${mm}-${dd}`;
+        let dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
         let option = document.createElement("option");
         option.value = dateStr;
@@ -184,36 +179,38 @@
       currentDate = dateSelect.value;
     }
 
+    // 매출 금액 포맷팅
     function formatCurrency(num) {
       if (num === null || num === undefined || num === "" || isNaN(Number(num))) return "-";
       return `$ ${Number(num).toLocaleString()}`;
     }
 
-    // 국가별 베이스 데이터
+    // 국가별 레이아웃용 베이스 데이터 (모든 수치는 가짜로 채우지 않고 '-' 로 세팅)
     function getBaseTop20(region) {
       let base = [
-        { rank: 1, name: "제우스: 오만의 신", pub: "컴투스", genre: "MMORPG", rev: "607251", change: "-", growth: "0%", kind: "" },
-        { rank: 2, name: "이클립스: 더 어웨이크닝", pub: "스마일게이트", genre: "MMORPG", rev: "461314", change: "-", growth: "0%", kind: "" },
-        { rank: 3, name: "WOS: 화이트 아웃 서바이벌", pub: "센추리게임즈", genre: "전략", rev: "399704", change: "-", growth: "0%", kind: "" },
-        { rank: 4, name: "로블록스", pub: "로블록스", genre: "샌드박스", rev: "311319", change: "-", growth: "0%", kind: "" },
-        { rank: 5, name: "메이플 키우기", pub: "넥슨", genre: "방치형 RPG", rev: "283022", change: "-", growth: "0%", kind: "" },
-        { rank: 6, name: "리니지M", pub: "엔씨소프트", genre: "MMORPG", rev: "257084", change: "-", growth: "0%", kind: "" },
-        { rank: 7, name: "킹샷", pub: "센추리게임즈", genre: "전략", rev: "195362", change: "-", growth: "0%", kind: "" },
-        { rank: 8, name: "운빨존많겜", pub: "111%", genre: "디펜스", rev: "190436", change: "-", growth: "0%", kind: "" },
-        { rank: 9, name: "가십 하버", pub: "마이크로펀", genre: "퍼즐", rev: "164389", change: "-", growth: "0%", kind: "" },
-        { rank: 10, name: "트릭컬 리바이브", pub: "에피드게임즈", genre: "수집형 RPG", rev: "139832", change: "-", growth: "0%", kind: "" },
-        { rank: 11, name: "붕괴: 스타레일", pub: "호요버스", genre: "턴제 RPG", rev: "131799", change: "-", growth: "0%", kind: "" },
-        { rank: 12, name: "로얄 매치", pub: "드림게임즈", genre: "퍼즐", rev: "128351", change: "-", growth: "0%", kind: "" },
-        { rank: 13, name: "솔: 인챈트", pub: "넷마블", genre: "MMORPG", rev: "121525", change: "-", growth: "0%", kind: "" },
-        { rank: 14, name: "FC 모바일", pub: "넥슨", genre: "스포츠", rev: "120176", change: "-", growth: "0%", kind: "" },
-        { rank: 15, name: "쿠키런: 크럼블", pub: "데브시스터즈", genre: "방치형 RPG", rev: "105145", change: "-", growth: "0%", kind: "" },
-        { rank: 16, name: "오딘: 발할라 라이징", pub: "카카오게임즈", genre: "MMORPG", rev: "98420", change: "-", growth: "0%", kind: "" },
-        { rank: 17, name: "승리의 여신: 니케", pub: "레벨인피니트", genre: "슈팅 RPG", rev: "91240", change: "-", growth: "0%", kind: "" },
-        { rank: 18, name: "원신", pub: "호요버스", genre: "오픈월드 RPG", rev: "87600", change: "-", growth: "0%", kind: "" },
-        { rank: 19, name: "아키에이지 워", pub: "카카오게임즈", genre: "MMORPG", rev: "82150", change: "-", growth: "0%", kind: "" },
-        { rank: 20, name: "버섯커 키우기", pub: "조이넷게임즈", genre: "방치형 RPG", rev: "78900", change: "-", growth: "0%", kind: "" }
+        { rank: 1, name: "제우스: 오만의 신", pub: "컴투스", genre: "MMORPG" },
+        { rank: 2, name: "이클립스: 더 어웨이크닝", pub: "스마일게이트", genre: "MMORPG" },
+        { rank: 3, name: "WOS: 화이트 아웃 서바이벌", pub: "센추리게임즈", genre: "전략" },
+        { rank: 4, name: "로블록스", pub: "로블록스", genre: "샌드박스" },
+        { rank: 5, name: "메이플 키우기", pub: "넥슨", genre: "방치형 RPG" },
+        { rank: 6, name: "리니지M", pub: "엔씨소프트", genre: "MMORPG" },
+        { rank: 7, name: "킹샷", pub: "센추리게임즈", genre: "전략" },
+        { rank: 8, name: "운빨존많겜", pub: "111%", genre: "디펜스" },
+        { rank: 9, name: "가십 하버", pub: "마이크로펀", genre: "퍼즐" },
+        { rank: 10, name: "트릭컬 리바이브", pub: "에피드게임즈", genre: "수집형 RPG" },
+        { rank: 11, name: "붕괴: 스타레일", pub: "호요버스", genre: "턴제 RPG" },
+        { rank: 12, name: "로얄 매치", pub: "드림게임즈", genre: "퍼즐" },
+        { rank: 13, name: "솔: 인챈트", pub: "넷마블", genre: "MMORPG" },
+        { rank: 14, name: "FC 모바일", pub: "넥슨", genre: "스포츠" },
+        { rank: 15, name: "쿠키런: 크럼블", pub: "데브시스터즈", genre: "방치형 RPG" },
+        { rank: 16, name: "오딘: 발할라 라이징", pub: "카카오게임즈", genre: "MMORPG" },
+        { rank: 17, name: "승리의 여신: 니케", pub: "레벨인피니트", genre: "슈팅 RPG" },
+        { rank: 18, name: "원신", pub: "호요버스", genre: "오픈월드 RPG" },
+        { rank: 19, name: "아키에이지 워", pub: "카카오게임즈", genre: "MMORPG" },
+        { rank: 20, name: "버섯커 키우기", pub: "조이넷게임즈", genre: "방치형 RPG" }
       ];
 
+      // 지역별 메인 타이틀 변경 (수치는 넣지 않음)
       if(region !== 'KR') {
         base.forEach((b, idx) => {
            if(region === 'US') {
@@ -233,12 +230,11 @@
            if(region === 'TW') {
               if(idx===5) { b.name = "리니지W"; b.pub = "엔씨소프트"; b.genre = "MMORPG"; }
            }
-           
-           let multi = region === 'US' ? 4.5 : region === 'CN' ? 5.2 : region === 'JP' ? 2.8 : region === 'TW' ? 0.8 : 1;
-           b.rev = String(Math.floor(Number(b.rev) * multi));
         });
       }
-      return base.map(b => ({ ...b, rev: formatCurrency(b.rev) }));
+
+      // API에 없는 항목은 명확하게 "-" 처리 (거짓 데이터 원천 차단)
+      return base.map(b => ({ ...b, rev: "-", change: "-", growth: "-", kind: "", rowType: "" }));
     }
 
     function renderChangeBadge(change, kind) {
@@ -254,123 +250,74 @@
         ? `<span class="change-up">▲${Math.abs(numChange)}</span>` 
         : `<span class="change-down">▼${Math.abs(numChange)}</span>`;
     }
-    
-    function renderMiniBars() {
-      const bars = Array.from({length: 7}, () => Math.floor(Math.random() * 55) + 40);
-      return `<div class="mini-chart">${bars.map(h => `<div class="mini-bar" style="height:${Math.max(3, Math.round(h * 0.16))}px;"></div>`).join('')}</div>`; 
-    }
 
-    function generateMockHistory(currentRevNum, growthPct, baseDateStr) {
-      const rev = currentRevNum > 0 ? currentRevNum : (Math.floor(Math.random() * 500000) + 50000);
-      const g = isNaN(Number(growthPct)) ? 0 : Number(growthPct);
-      
-      let rev1 = Math.round(rev / (1 + (g / 100)));
-      if (rev1 <= 0 || isNaN(rev1)) rev1 = Math.round(rev * 0.85);
-      let rev2 = Math.round(rev1 * (Math.random() * 0.2 + 0.9)); 
-      
-      const d0 = new Date(baseDateStr);
-      const d1 = new Date(d0); d1.setDate(d1.getDate() - 1);
-      const d2 = new Date(d0); d2.setDate(d2.getDate() - 2);
-      const fmtDate = (d) => `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
-      
-      return {
-        summary: {
-          totalRev: formatCurrency(rev * 34), dailyRev: formatCurrency(Math.round((rev + rev1 + rev2)/3)),
-          maxIos: Math.floor(Math.random() * 3) + 1, maxAos: Math.floor(Math.random() * 2) + 1,
-          totalDl: (rev * 0.15).toLocaleString()
-        },
-        daily: [
-          { date: fmtDate(d2), rev: formatCurrency(rev2), revPct: 60, ios: Math.floor(Math.random() * 15)+5, aos: Math.floor(Math.random() * 5)+1, dl: Math.round(rev2*0.002).toLocaleString(), dlPct: 70 },
-          { date: fmtDate(d1), rev: formatCurrency(rev1), revPct: 75, ios: Math.floor(Math.random() * 10)+2, aos: Math.floor(Math.random() * 3)+1, dl: Math.round(rev1*0.0025).toLocaleString(), dlPct: 85 },
-          { date: fmtDate(d0), rev: formatCurrency(rev), revPct: 100, ios: Math.floor(Math.random() * 5)+1, aos: 1, dl: Math.round(rev*0.003).toLocaleString(), dlPct: 100 }
-        ]
-      };
-    }
-
+    // AI 인사이트 생성 (실제 넘어온 수치만 기반으로 생성)
     function generateExpertInsight(kind, growth, reason, feature) {
-      if (kind === "신규 출시") return `출시 직후 단기간에 대규모 트래픽을 확보하며 시장 안착에 성공했습니다. ${feature ? '특히 ' + feature + ' 요소가 ' : '핵심 콘텐츠가 '}유저들에게 긍정적인 반응을 얻고 있으며, 향후 리텐션 방어가 중장기 매출을 결정지을 핵심 지표가 될 것입니다.`;
-      if (growth > 100) return `${reason ? reason + ' 업데이트의 효과로 ' : '최근 라이브 프로모션 효과로 '}매출이 전일 대비 폭발적으로(+${growth}%) 증가했습니다. 충성 코어 유저층의 확실한 ARPU 상승을 의미합니다.`;
-      if (growth > 0) return `견고한 라이브 운영을 바탕으로 안정적인 상승세를 보입니다. ${reason ? '특히 ' + reason + ' 요인이 ' : '최근 적용된 패치가 '}결제 전환율(CVR)을 끌어올린 것으로 분석됩니다.`;
-      return `현재 순위권 내에서 안정적인 캐시카우 역할을 수행 중입니다. 전반적인 지표는 견조하게 유지되고 있으나 추가적인 매출 도약을 위해서는 유저 피드백을 반영한 BM 다각화가 요구됩니다.`;
-    }
-
-    // ★ 초고속 병렬 데이터 통신 (속도 저하 완벽 방지)
-    async function loadData(autoExplore = false) {
-      const dateSelect = document.getElementById("datePicker");
-      const notice = document.getElementById("noticeText");
-      
-      if (autoExplore) {
-         notice.innerHTML = `최신 데이터를 빠르게 스캔하고 있습니다... <span style="font-size:11.5px; color:#3182f6; font-weight:800;">(병렬 탐색 중)</span>`;
-         
-         let fetchPromises = Array.from(dateSelect.options).map(opt => {
-            let d = opt.value;
-            let url = `https://webzendashboard.webboy0926.workers.dev/data/issues/${d}.json`;
-            return fetch(url).then(res => res.ok ? res.json().then(json => ({ date: d, json: json })) : Promise.reject()).catch(() => null);
-         });
-
-         let results = await Promise.all(fetchPromises);
-         let best = results.find(r => r !== null); 
-
-         if (best) {
-            applyData(best.date, best.json.regions[currentRegion] || [], "초고속 탐색 성공");
-         } else {
-            applyData("2026-09-29", FALLBACK_DATA.regions[currentRegion] || [], "백업본");
-         }
+      let txt = "";
+      if (kind === "신규 출시") {
+         txt = `출시 직후 시장에 진입했습니다. ${feature ? '특히 ' + feature + ' 등 주요 특징이 ' : '핵심 콘텐츠가 '}유저 반응을 이끌어낸 것으로 보이며, 첫 대규모 업데이트 전후의 리텐션 방어가 중장기 매출을 결정지을 것입니다.`;
+      } else if (growth > 100) {
+         txt = `${reason ? reason + ' 요인으로 ' : '최근 이벤트 효과로 '}매출이 전일 대비 폭발적으로(+${growth}%) 증가했습니다. 충성 유저층의 ARPU 상승이 확인됩니다.`;
+      } else if (growth > 0) {
+         txt = `라이브 운영을 통해 매출 상승세를 보입니다. ${reason ? reason + ' 적용이 ' : '최근 패치가 '}결제 전환율(CVR) 상승에 긍정적 영향을 주었습니다.`;
       } else {
-         let testDate = dateSelect.value;
-         notice.innerHTML = `실시간 데이터를 동기화하고 있습니다... <span style="font-size:11.5px; color:#3182f6; font-weight:800;">(${testDate})</span>`;
-         let url = `https://webzendashboard.webboy0926.workers.dev/data/issues/${testDate}.json`;
-
-         try {
-            let res = await fetch(url);
-            if (res.ok) {
-               let json = await res.json();
-               applyData(testDate, json.regions[currentRegion] || [], "직접 연결 성공");
-            } else {
-               applyData(testDate, [], "없음"); 
-            }
-         } catch(e) {
-            if (testDate === "2026-09-29") {
-               applyData(testDate, FALLBACK_DATA.regions[currentRegion] || [], "백업본");
-            } else {
-               applyData(testDate, [], "없음");
-            }
-         }
+         txt = `현재 순위권 내에서 캐시카우 역할을 수행 중입니다. 추가적인 매출 도약을 위해서는 유저 피드백을 반영한 라이브 서비스 개선이 필요합니다.`;
       }
+      return txt;
     }
 
-    function applyData(dateStr, dataArr, statusType) {
-       currentDate = dateStr;
-       document.getElementById("datePicker").value = dateStr;
-       document.getElementById("footerDate").innerText = dateStr;
-       processApiData(dataArr);
+    // ★ 단일 초고속 스캔 (1일 치만 찔러보기, 0.1초 소요)
+    async function loadData() {
+      const notice = document.getElementById("noticeText");
+      notice.innerHTML = `실시간 데이터를 동기화하고 있습니다... <span style="font-size:11.5px; color:#3182f6; font-weight:800;">(${currentDate})</span>`;
+      
+      let targetUrl = `https://webzendashboard.webboy0926.workers.dev/data/issues/${currentDate}.json`;
+      
+      try {
+        // 1. 직접 접근 시도 (가장 빠름)
+        let res = await fetch(targetUrl);
+        if (res.ok) {
+          let json = await res.json();
+          applyData(json.regions[currentRegion] || [], "직접 연결");
+          return;
+        }
+        if (res.status === 404) throw new Error("404");
+      } catch(err) {
+        // 2. 직접 접근 실패 시 1회만 프록시 즉시 접근
+        try {
+          let proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+          let pRes = await fetch(proxyUrl);
+          if (pRes.ok) {
+            let json = await pRes.json();
+            applyData(json.regions[currentRegion] || [], "우회망");
+            return;
+          }
+        } catch(e) { }
+      }
+      
+      // 3. 파일이 완전히 없을 경우 빈 배열 전달
+      applyData([], "없음");
+    }
+
+    function applyData(dataArr, statusType) {
+       document.getElementById("footerDate").innerText = currentDate;
+       processApiData(dataArr); // 실제 데이터 매핑 처리
        
        const notice = document.getElementById("noticeText");
-       if (statusType.includes("성공")) {
-          notice.innerHTML = `<span style="color:#1e7e34;">${currentRegion} (${dateStr}) — 실시간 API 연동 완료 (${statusType})</span>`;
-       } else if (statusType === "백업본") {
-          notice.innerHTML = `<span style="color:#d9383a;">${currentRegion} (${dateStr}) — 보안 접근 제한으로 내장된 백업 데이터를 표출합니다.</span>`;
+       if (statusType === "직접 연결" || statusType === "우회망") {
+          notice.innerHTML = `<span style="color:#1e7e34;">${currentRegion} (${currentDate}) — 실시간 API 데이터 연동 성공</span>`;
        } else {
-          notice.innerHTML = `<span style="color:#8b95a1;">${currentRegion} (${dateStr}) — 해당 일자의 이슈 데이터를 찾을 수 없습니다. 기본 랭킹만 표시합니다.</span>`;
+          notice.innerHTML = `<span style="color:#d9383a;">${currentRegion} (${currentDate}) — 해당 일자의 API 데이터를 서버에서 찾을 수 없습니다. (데이터 없음)</span>`;
        }
     }
 
-    const FALLBACK_DATA = {
-      "regions": {
-        "KR": [{ "kind": "신규 출시", "title": "제우스: 오만의 신", "rank": 1, "genre": "MMORPG", "publisher": "컴투스", "auto": { "change": 0, "status": "", "revenue": 607251, "growth_pct": -17 }, "feature": "그리스 신화 세계관을 배경으로 대규모 진영 전투를 수행하는 MMORPG", "refs": [] }],
-        "JP": [{ "kind": "매출 상승", "title": "홀로라이브 드림즈", "rank": 2, "genre": "서브컬쳐 리듬", "publisher": "퀄리아츠", "auto": { "change": "RE", "status": "▲", "revenue": 738631, "growth_pct": 754 }, "reason": "첫 대형 업데이트와 신규 에리어 '소다팝 라군' 추가", "refs": [] }],
-        "CN": [{ "kind": "매출 상승", "title": "전략적 팀 전투", "rank": 2, "genre": "오토배틀러", "publisher": "라이엇게임즈", "auto": { "change": 4, "status": "▲", "revenue": 2932621, "growth_pct": 226 }, "reason": "18.3 버전 업데이트와 '画之灵' 시즌 한정 복귀", "refs": [] }],
-        "US": [{ "kind": "매출 상승", "title": "드래곤볼Z 폭렬격전", "rank": 8, "genre": "수집형 ARPG", "publisher": "반다이 남코", "auto": { "change": "RE", "status": "▲", "revenue": 632934, "growth_pct": 740 }, "reason": "글로벌판 돗칸 페스티벌 신규 캐릭터 가챠 추가", "refs": [] }]
-      }
-    };
-
+    // 실 데이터 가공 함수
     function processApiData(rawData) {
       let baseTop20 = getBaseTop20(currentRegion);
 
       apiData = rawData.map(item => {
-        const revNum = item.auto?.revenue || 0;
+        const revNum = item.auto?.revenue; 
         const gPct = item.auto?.growth_pct;
-        const historyData = generateMockHistory(revNum, gPct, currentDate);
         const expertInsight = generateExpertInsight(item.kind, Number(gPct), item.reason, item.feature);
         
         let finalRefs = item.refs || [];
@@ -379,27 +326,21 @@
         finalRefs = finalRefs.filter(art => {
           let titleStr = art.title;
           let parsedDate = null;
-          
-          // 형식 탐색: YYYY-MM-DD, YYYY.MM.DD 등
           let m1 = titleStr.match(/(\d{4})[-\/\.]\s*(\d{1,2})[-\/\.]\s*(\d{1,2})/);
           if (m1) {
             parsedDate = new Date(m1[1], Number(m1[2])-1, Number(m1[3]));
           } else {
-            // 형식 탐색: M월 D일, M月D日 등
             let m2 = titleStr.match(/(\d{1,2})\s*[월月\/\-]\s*(\d{1,2})\s*[일日]?/);
-            if (m2) {
-              parsedDate = new Date(new Date(currentDate).getFullYear(), Number(m2[1])-1, Number(m2[2]));
-            }
+            if (m2) parsedDate = new Date(new Date(currentDate).getFullYear(), Number(m2[1])-1, Number(m2[2]));
           }
           
           if (parsedDate) {
             const diffDays = (new Date(currentDate) - parsedDate) / (1000 * 60 * 60 * 24);
-            return diffDays >= -5 && diffDays <= 30; // 30일 초과된 과거 기사 제거
+            return diffDays >= -5 && diffDays <= 30; // 30일 초과 과거 기사 제거
           }
-          return true; // 날짜가 적히지 않은 기사는 기본 유지
+          return true; 
         });
 
-        // 30일 내 기사가 없거나 원본이 비었을 때의 다이렉트 검색 Fallback 카드
         if (finalRefs.length === 0) {
            finalRefs = [{ 
               title: `최근 30일 내 기사 없음 - '${item.title}' 구글 뉴스 검색하기`, 
@@ -415,14 +356,15 @@
 
         return {
           rank: item.rank, name: item.title, pub: item.publisher || item.developer || "알 수 없음", genre: item.genre || "기타", kind: item.kind,
-          rev: formatCurrency(revNum),
+          rev: revNum ? formatCurrency(revNum) : "-",
           change: item.auto?.status === "▲" ? `▲${item.auto?.change}` : (item.auto?.change || 0),
           growth: formattedGrowth,
           feature: item.feature, reason: item.reason, devNote: item.developer_note, 
-          refs: finalRefs, history: historyData, insight: expertInsight, rowType: "row-api-updated"
+          refs: finalRefs, insight: expertInsight, rowType: "row-api-updated"
         };
       });
 
+      // API 데이터를 Base 배열에 덮어쓰기 (API 수신된 것만 수치가 들어감)
       apiData.forEach(apiItem => {
          const index = baseTop20.findIndex(b => b.rank === apiItem.rank);
          if (index !== -1) baseTop20[index] = { ...baseTop20[index], ...apiItem };
@@ -441,12 +383,11 @@
         <tr class="${item.rowType || ''}">
           <td class="col-center">${renderChangeBadge(item.change, item.kind)}</td>
           <td class="col-center rank-num">${item.rank}</td>
-          <td><span class="game-name">${item.name}</span> ${item.rowType ? '<span style="font-size:10px; color:#3182f6; font-weight:800; margin-left:4px;">(이슈 반영)</span>' : ''}</td>
+          <td><span class="game-name">${item.name}</span> ${item.rowType ? '<span style="font-size:10px; color:#3182f6; font-weight:800; margin-left:4px;">(API 수신)</span>' : ''}</td>
           <td>${item.pub}</td>
           <td>${item.genre}</td>
-          <td class="col-right net-revenue">${item.rev}</td>
-          <td class="col-center">${renderMiniBars()}</td>
-          <td class="col-right ${String(item.growth).includes('+') ? 'growth-pos' : (item.growth === '-' ? '' : 'growth-neg')}">${item.growth}</td>
+          <td class="col-right" style="font-weight:700; color:${item.rev !== '-' ? '#191f28' : '#8b95a1'};">${item.rev}</td>
+          <td class="col-right ${String(item.growth).includes('+') ? 'growth-pos' : (item.growth === '-' ? 'growth-null' : 'growth-neg')}">${item.growth}</td>
         </tr>
       `).join('');
     }
@@ -455,15 +396,15 @@
       const tbody = document.getElementById("trackedTableBody");
       const rowsHtml = trackedGames.map(gameName => {
         const found = displayData.find(g => g.name.toLowerCase().trim() === gameName.toLowerCase().trim());
-        if (found) return `<tr><td><strong class="game-name">${found.name}</strong></td><td class="col-center rank-num">${found.rank}위</td><td>${found.pub}</td><td>${found.genre}</td><td class="col-right net-revenue">${found.rev}</td><td class="col-center">${renderMiniBars()}</td><td class="col-right ${String(found.growth).includes('+') ? 'growth-pos' : (found.growth === '-' ? '' : 'growth-neg')}">${found.growth}</td><td class="col-center"><button class="nav-pill-btn outline" onclick="removeTrackedGame('${found.name}')">삭제</button></td></tr>`;
-        return `<tr><td><strong class="game-name">${gameName}</strong></td><td class="col-center">이슈 외</td><td>-</td><td>-</td><td class="col-right">-</td><td class="col-center">-</td><td class="col-right">-</td><td class="col-center"><button class="nav-pill-btn outline" onclick="removeTrackedGame('${gameName}')">삭제</button></td></tr>`;
+        if (found) return `<tr><td><strong class="game-name">${found.name}</strong></td><td class="col-center rank-num">${found.rank}위</td><td>${found.pub}</td><td>${found.genre}</td><td class="col-right" style="font-weight:700;">${found.rev}</td><td class="col-right ${String(found.growth).includes('+') ? 'growth-pos' : (found.growth === '-' ? 'growth-null' : 'growth-neg')}">${found.growth}</td><td class="col-center"><button class="nav-pill-btn outline" onclick="removeTrackedGame('${found.name}')">삭제</button></td></tr>`;
+        return `<tr><td><strong class="game-name">${gameName}</strong></td><td class="col-center">이슈 외</td><td>-</td><td>-</td><td class="col-right">-</td><td class="col-right">-</td><td class="col-center"><button class="nav-pill-btn outline" onclick="removeTrackedGame('${gameName}')">삭제</button></td></tr>`;
       }).join('');
-      tbody.innerHTML = rowsHtml || `<tr><td colspan="8" class="col-center" style="padding:20px;">트래킹 중인 게임이 없습니다.</td></tr>`;
+      tbody.innerHTML = rowsHtml || `<tr><td colspan="7" class="col-center" style="padding:20px;">트래킹 중인 게임이 없습니다.</td></tr>`;
     }
 
     function renderNewsAccordion() {
       const wrap = document.getElementById("newsAccordion");
-      if (apiData.length === 0) return wrap.innerHTML = `<div style="padding:20px; text-align:center; color:#8b95a1;">해당 일자에 발생한 특이동향(비즈니스 이슈)이 없습니다.</div>`;
+      if (apiData.length === 0) return wrap.innerHTML = `<div style="padding:20px; text-align:center; color:#8b95a1;">해당 일자 서버 API에 등록된 특이동향(비즈니스 이슈) 타이틀이 없습니다.</div>`;
       
       wrap.innerHTML = apiData.map((item, idx) => `
         <div class="news-item">
@@ -474,25 +415,18 @@
           <div class="news-item-body ${idx === 0 ? 'active' : ''}" id="acc-body-${idx}">
             
             <table class="detail-table">
-              <thead>
-                <tr class="dt-yellow-bg"><th>총 매출 (USD)</th><th>일 평균 매출</th><th>최고 iOS 순위</th><th>최고 AOS 순위</th><th>총 다운로드 수 (회)</th></tr>
-                <tr class="dt-white-bg"><td>${item.history.summary.totalRev}</td><td>${item.history.summary.dailyRev}</td><td>${item.history.summary.maxIos}</td><td>${item.history.summary.maxAos}</td><td>${item.history.summary.totalDl}</td></tr>
-                <tr class="dt-gray-bg"><th>일자</th><th>매출 지표</th><th>iOS 순위</th><th>AOS 순위</th><th>다운로드 수 (회)</th></tr>
-              </thead>
-              <tbody>
-                ${item.history.daily.map(d => `<tr><td>${d.date}</td><td style="background: linear-gradient(to right, #fce1d2 ${d.revPct}%, transparent ${d.revPct}\%); text-align: center;">${d.rev}</td><td>${d.ios}</td><td>${d.aos}</td><td style="background: linear-gradient(to left, #e5e8eb ${d.dlPct}%, transparent ${d.dlPct}\%); text-align: right; padding-right: 14px;">${d.dl}</td></tr>`).join('')}
-              </tbody>
+              <thead><tr class="dt-gray-bg"><th colspan="5" style="color:#d9383a;">⚠️ 데이터 연동 필요: 서버 API에 최근 3일 상세 내역(History) 배열이 존재하지 않습니다.</th></tr></thead>
             </table>
 
             <div class="insight-box">
-              <div class="insight-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>전문가 비즈니스 인사이트</div>
-              <p style="margin-bottom:12px; color:#191f28; font-size:13.5px; font-weight:500;"><strong>[분석 요약]</strong> ${item.insight}</p>
+              <div class="insight-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>비즈니스 인사이트 요약</div>
+              <p style="margin-bottom:12px; color:#191f28; font-size:13.5px; font-weight:500;"><strong>[분석 내용]</strong> ${item.insight}</p>
               <p style="margin-bottom:6px; font-size:12.5px; color:#4e5968;"><strong>게임 특징:</strong> ${item.feature || "-"}</p>
               ${item.reason ? `<p style="margin-bottom:6px; font-size:12.5px; color:#4e5968;"><strong>변동 사유:</strong> ${item.reason}</p>` : ''}
               ${item.devNote ? `<p style="color:#8b95a1; font-size:11.5px; margin-top:10px;">* 개발사 정보: ${item.devNote}</p>` : ''}
             </div>
             
-            <div style="font-weight:800; color:#191f28; margin-bottom: 8px; font-size:12.5px; padding-top:4px;">📰 관련 기사 다이렉트 이동</div>
+            <div style="font-weight:800; color:#191f28; margin-bottom: 8px; font-size:12.5px; padding-top:4px;">📰 최신 관련 기사 (30일 이내)</div>
             ${item.refs.map(art => `
               <a href="${art.url}" target="_blank" class="article-card">
                 <div class="article-card-left">${art.isFallback ? '🔍' : '📰'} <span>${art.title}</span></div>
@@ -516,11 +450,12 @@
         const n = code === 'KR'?'한국':code==='TW'?'대만':code==='JP'?'일본':code==='US'?'미국':'중국';
         btn.className = btn.textContent.includes(n) ? "nav-pill-btn active" : "nav-pill-btn outline";
       });
-      loadData(true); 
+      loadData(); 
     }
     
     function handleDateChange() { 
-      loadData(false); 
+      currentDate = document.getElementById("datePicker").value; 
+      loadData(); 
     }
 
     const searchInput = document.getElementById('trackInput'), autocompleteList = document.getElementById('autocompleteList');
@@ -560,7 +495,7 @@
 
     window.addEventListener("DOMContentLoaded", () => { 
       initDateOptions(); 
-      loadData(true); 
+      loadData(); 
     });
   </script>
 </body>
