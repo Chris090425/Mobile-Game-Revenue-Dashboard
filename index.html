@@ -31,7 +31,7 @@
     .nav-pill-btn.active { background: var(--accent-black); color: #ffffff; }
     .nav-pill-btn.outline { border-color: var(--border-color); background: #ffffff; color: var(--text-main); }
     .date-select-wrap { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; }
-    .date-select { border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; font-size: 12.5px; font-weight: 600; outline: none; }
+    .date-select { border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; font-size: 12.5px; font-weight: 600; outline: none; cursor: pointer; }
 
     .notice-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 16px; display: flex; align-items: center; gap: 8px; font-weight: 600; }
     .section-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
@@ -76,7 +76,7 @@
     .insight-box { background: #ffffff; border: 1px solid #d1d6db; border-left: 4px solid var(--accent-blue); padding: 14px 16px; margin-bottom: 16px; border-radius: 4px; line-height: 1.6; }
     .insight-title { font-weight: 800; color: #1d4ed8; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
     
-    /* 🚀 관련 기사 다이렉트 링크 카드 스타일 */
+    /* 관련 기사 다이렉트 링크 카드 스타일 */
     .article-card { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 8px; text-decoration: none; color: #191f28; transition: all 0.15s; }
     .article-card:hover { border-color: var(--accent-blue); background: #f0f7ff; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.04); }
     .article-card-left { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 12.5px; }
@@ -104,6 +104,7 @@
       </div>
       <div class="date-select-wrap">
         <span>기준일</span>
+        <!-- onchange 연결 완벽 복구 -->
         <select class="date-select" id="datePicker" onchange="handleDateChange()"></select>
       </div>
       <div class="nav-right" id="countryTabs">
@@ -164,7 +165,6 @@
     let apiData = [];      
     let displayData = [];  
 
-    // 최근 7일치 날짜 생성
     function initDateOptions() {
       const dateSelect = document.getElementById("datePicker");
       dateSelect.innerHTML = "";
@@ -186,13 +186,11 @@
       currentDate = dateSelect.value;
     }
 
-    // 매출 단위 USD 통일 포맷
     function formatCurrency(num) {
       if (num === null || num === undefined || num === "" || isNaN(Number(num))) return "-";
       return `$ ${Number(num).toLocaleString()}`;
     }
 
-    // 국가별 베이스 데이터 분리 적용
     function getBaseTop20(region) {
       let base = [
         { rank: 1, name: "제우스: 오만의 신", pub: "컴투스", genre: "MMORPG", rev: "607251", change: "-", growth: "0%", kind: "" },
@@ -297,61 +295,80 @@
       return `현재 순위권 내에서 안정적인 캐시카우 역할을 수행 중입니다. 전반적인 지표는 견조하게 유지되고 있으나 추가적인 매출 도약을 위해서는 유저 피드백을 반영한 BM 다각화가 요구됩니다.`;
     }
 
-    // ★ 초고속 탐색 적용: allorigins raw 방식으로 딜레이 제거
-    async function loadDataFromApi() {
+    // ★ 단일화된 초고속 탐색 함수 (자동 및 수동 탐색 모두 대응)
+    async function loadData(targetDateStr, autoExplore = false) {
       const dateSelect = document.getElementById("datePicker");
       const notice = document.getElementById("noticeText");
       
-      let currentIndex = dateSelect.selectedIndex;
+      let startIndex = Array.from(dateSelect.options).findIndex(o => o.value === targetDateStr);
+      if (startIndex === -1) startIndex = 0;
       
-      while(currentIndex < dateSelect.options.length) {
-        let testDate = dateSelect.options[currentIndex].value;
+      // 자동 탐색이면 끝까지(과거로) 조회, 수동 조작이면 딱 선택한 그 날짜 1개만 조회
+      let maxIdx = autoExplore ? dateSelect.options.length : startIndex + 1;
+      
+      for (let i = startIndex; i < maxIdx; i++) {
+        let testDate = dateSelect.options[i].value;
         notice.innerHTML = `실시간 데이터를 동기화하고 있습니다... <span style="font-size:11.5px; color:#3182f6; font-weight:800;">(${testDate} 탐색 중)</span>`;
         
         let targetUrl = `https://webzendashboard.webboy0926.workers.dev/data/issues/${testDate}.json`;
         
         try {
           // 1. 직접 접근 시도 (가장 빠름)
-          let response = await fetch(targetUrl).catch(() => { throw new Error("NETWORK_FAIL"); });
-          if (response.ok) {
-            let json = await response.json();
-            dateSelect.selectedIndex = currentIndex; currentDate = testDate;
-            processApiData(json.regions[currentRegion] || []);
-            notice.innerHTML = `<span style="color:#1e7e34;">${currentRegion} (${testDate}) — 실시간 API 연동 성공</span>`;
-            document.getElementById("footerDate").innerText = testDate;
+          let res = await fetch(targetUrl).catch(() => { throw new Error("NETWORK_FAIL"); });
+          if (res.ok) {
+            let json = await res.json();
+            applyData(testDate, json.regions[currentRegion] || [], "직접 연결");
             return;
-          } 
-          if (response.status === 404) { currentIndex++; continue; }
+          }
+          if (res.status === 404 && autoExplore) continue; // 404면 대기없이 바로 다음 날짜 루프로
           throw new Error("HTTP_ERROR");
-        } catch (err) {
-          // 2. 고속 프록시 우회 시도 (allorigins raw)
+        } catch(err) {
+          // 2. 프록시 우회망 연결 시도 (allorigins raw)
           try {
             let proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-            let proxyRes = await fetch(proxyUrl);
-            if(proxyRes.status === 404) { currentIndex++; continue; }
-            if(!proxyRes.ok) throw new Error("PROXY_FAIL");
+            let pRes = await fetch(proxyUrl);
+            if (pRes.status === 404 && autoExplore) continue;
+            if (!pRes.ok) throw new Error("PROXY_FAIL");
             
-            let json = await proxyRes.json();
-            dateSelect.selectedIndex = currentIndex; currentDate = testDate;
-            processApiData(json.regions[currentRegion] || []);
-            notice.innerHTML = `<span style="color:#1e7e34;">${currentRegion} (${testDate}) — 실시간 API 연동 완료 (보안 우회망)</span>`;
-            document.getElementById("footerDate").innerText = testDate;
+            let json = await pRes.json();
+            applyData(testDate, json.regions[currentRegion] || [], "우회망");
             return;
           } catch(e) {
-            break; // 프록시 실패 시 즉시 루프 탈출
+            // 수동 선택 모드에서 연결 실패 시
+            if (!autoExplore) {
+               if (testDate === "2026-09-29") {
+                 applyData(testDate, FALLBACK_DATA.regions[currentRegion] || [], "백업본");
+               } else {
+                 applyData(testDate, [], "없음");
+               }
+               return;
+            }
           }
         }
       }
       
-      // 3. Fallback 데이터 표출
+      // 3. 자동 탐색을 모두 돌았는데도 실패한 경우 -> 최후의 Fallback 보루
       const fallbackDate = "2026-09-29";
       let fallbackIdx = Array.from(dateSelect.options).findIndex(o => o.value === fallbackDate);
       if(fallbackIdx !== -1) dateSelect.selectedIndex = fallbackIdx;
-      currentDate = fallbackDate;
-      
-      processApiData(FALLBACK_DATA.regions[currentRegion] || []);
-      notice.innerHTML = `<span style="color:#d9383a;">${currentRegion} (${currentDate}) — 서버 접속 제한으로 내장된 백업 데이터를 표출합니다.</span>`;
-      document.getElementById("footerDate").innerText = currentDate;
+      applyData(fallbackDate, FALLBACK_DATA.regions[currentRegion] || [], "백업본");
+    }
+
+    // UI 적용 헬퍼
+    function applyData(dateStr, dataArr, statusType) {
+       currentDate = dateStr;
+       document.getElementById("datePicker").value = dateStr;
+       document.getElementById("footerDate").innerText = dateStr;
+       processApiData(dataArr);
+       
+       const notice = document.getElementById("noticeText");
+       if (statusType === "직접 연결" || statusType === "우회망") {
+          notice.innerHTML = `<span style="color:#1e7e34;">${currentRegion} (${dateStr}) — 실시간 API 연동 성공 (${statusType})</span>`;
+       } else if (statusType === "백업본") {
+          notice.innerHTML = `<span style="color:#d9383a;">${currentRegion} (${dateStr}) — API 접근 제한으로 내장된 백업 데이터를 표출합니다.</span>`;
+       } else {
+          notice.innerHTML = `<span style="color:#8b95a1;">${currentRegion} (${dateStr}) — 해당 일자의 이슈 데이터를 찾을 수 없습니다. 기본 랭킹만 표시합니다.</span>`;
+       }
     }
 
     const FALLBACK_DATA = {
@@ -479,46 +496,20 @@
       else { body.classList.add("active"); arrow.textContent = "▲ 접기"; }
     }
 
+    // 국가 탭 변경 시 자동(탐색) 로딩 시작
     function switchCountry(code) {
       currentRegion = code;
       document.querySelectorAll("#countryTabs .nav-pill-btn").forEach(btn => {
         const n = code === 'KR'?'한국':code==='TW'?'대만':code==='JP'?'일본':code==='US'?'미국':'중국';
         btn.className = btn.textContent.includes(n) ? "nav-pill-btn active" : "nav-pill-btn outline";
       });
-      
-      const idx = document.getElementById("datePicker").selectedIndex;
-      document.getElementById("datePicker").selectedIndex = 0; // 지역 변경시 가장 최신일자로 리셋
-      loadDataFromApi();
+      loadData(currentDate, true);
     }
     
+    // 사용자가 날짜를 '직접' 클릭했을 때는 수동 로딩 시작
     function handleDateChange() { 
-      currentDate = document.getElementById("datePicker").value; 
-      
-      // 선택한 특정 날짜 1개만 직접 로드 (루프 돌지 않음)
-      const notice = document.getElementById("noticeText");
-      notice.innerHTML = `실시간 데이터를 동기화하고 있습니다... <span style="font-size:11.5px; color:#3182f6; font-weight:800;">(${currentDate} 수동 로딩)</span>`;
-      
-      const targetUrl = `https://webzendashboard.webboy0926.workers.dev/data/issues/${currentDate}.json`;
-      
-      fetch(targetUrl)
-        .then(res => { if(!res.ok) throw new Error("fail"); return res.json(); })
-        .then(json => {
-           processApiData(json.regions[currentRegion] || []);
-           notice.innerHTML = `<span style="color:#1e7e34;">${currentRegion} (${currentDate}) — 실시간 API 연동 성공</span>`;
-        })
-        .catch(() => {
-           fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`)
-             .then(res => { if(!res.ok) throw new Error("fail"); return res.json(); })
-             .then(json => {
-                processApiData(json.regions[currentRegion] || []);
-                notice.innerHTML = `<span style="color:#1e7e34;">${currentRegion} (${currentDate}) — 실시간 API 연동 완료 (우회망)</span>`;
-             })
-             .catch(() => {
-                processApiData([]);
-                notice.innerHTML = `<span style="color:#d9383a;">${currentRegion} (${currentDate}) — 해당 일자의 이슈 데이터를 찾을 수 없습니다. 기본 랭킹만 표시합니다.</span>`;
-             });
-        });
-        document.getElementById("footerDate").innerText = currentDate;
+      let selectedVal = document.getElementById("datePicker").value; 
+      loadData(selectedVal, false); 
     }
 
     const searchInput = document.getElementById('trackInput'), autocompleteList = document.getElementById('autocompleteList');
@@ -556,9 +547,10 @@
       setTimeout(() => t.classList.remove("show"), 3000);
     }
 
+    // 초기 실행 시 최근 7일치 옵션 생성 후 자동(탐색) 로딩 시작
     window.addEventListener("DOMContentLoaded", () => { 
       initDateOptions(); 
-      loadDataFromApi(); 
+      loadData(currentDate, true); 
     });
   </script>
 </body>
